@@ -1,0 +1,8 @@
+# davey.mywindowwashing.com
+# This is a separate site from www.mywindowwashing.com and does not share
+# that site's robots.txt or sitemap.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://davey.mywindowwashing.com/sitemap.xml
