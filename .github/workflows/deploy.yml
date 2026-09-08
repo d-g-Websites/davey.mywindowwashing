@@ -1,0 +1,63 @@
+name: Deploy to VPS
+
+# Every push to main publishes the site. Nothing else is needed —
+# push, wait ~20 seconds, refresh the browser.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# If two pushes land close together, let the newer one win rather than
+# racing two rsyncs against the same directory.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # Full history so the sitemap can date each page from its last commit.
+          fetch-depth: 0
+
+      - name: Regenerate sitemap.xml
+        run: ./deploy/generate-sitemap.sh
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinning the host key is what stops a hijacked DNS record from
+          # collecting the deploy key. Do not replace this with
+          # StrictHostKeyChecking=no.
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Publish public/ to the web root
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PATH: ${{ secrets.VPS_PATH }}
+        run: |
+          # The trailing slash on public/ syncs the directory *contents*.
+          # --delete makes the server match the repo exactly, so deleting a
+          # file here deletes it from the live site too.
+          rsync -rlptDvz --delete \
+            --exclude '.DS_Store' \
+            --exclude 'Thumbs.db' \
+            -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" \
+            public/ "$VPS_USER@$VPS_HOST:$VPS_PATH/"
+
+      - name: Remove deploy key from the runner
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
