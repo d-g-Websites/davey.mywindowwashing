@@ -119,14 +119,25 @@ is not enabled, set it by hand: **Settings → Pages → Source: GitHub Actions*
 
 ### 3. Custom domain and HTTPS
 
-`public/CNAME` already names the domain, so the deploy claims it. Once DNS
-resolves, GitHub issues a Let's Encrypt certificate — usually minutes, but it
-can take up to an hour on a first setup. Then tick **Enforce HTTPS** under
-Settings → Pages.
+Set it in **Settings → Pages → Custom domain**: enter
+`davey.mywindowwashing.com` and save.
 
-Until DNS resolves the site is not reachable. This is expected: the page uses
-root-relative paths (`/img/…`), which only work at the domain root, so there
-is no useful preview at the `github.io` project URL.
+This step is required and cannot be done from the repository. With the
+Actions-based deploy used here, a `CNAME` file in the artifact does **not**
+register the domain — that only works for branch-based Pages deploys. Until
+the domain is saved in Settings, the domain resolves to GitHub and GitHub
+answers "There isn't a GitHub Pages site here", while the site itself sits at
+the project URL.
+
+`public/CNAME` is still worth keeping: on an Actions deploy, an artifact with
+no CNAME file can *clear* a custom domain that was previously set.
+
+Saving the domain runs the DNS check and starts certificate issuance —
+usually minutes. Then tick **Enforce HTTPS**.
+
+Until all of that is done the site is not reachable at the custom domain, and
+the project URL is not a useful preview either: the page uses root-relative
+paths (`/img/…`), which do not resolve under a `/repository-name/` prefix.
 
 ### 4. Verify
 
@@ -172,9 +183,12 @@ links, not its Search Console property.
 **The Actions run failed.** Open the failed step in the Actions tab. "Pages is
 not enabled" means step 2 above was skipped.
 
-**The site 404s at the custom domain.** DNS has not resolved yet, or the CNAME
-points somewhere other than `d-g-websites.github.io`. Check with `dig +short
-davey.mywindowwashing.com`.
+**"There isn't a GitHub Pages site here."** DNS is reaching GitHub but no site
+claims the domain — the custom domain is not set in Settings → Pages. See
+step 3. This is not a DNS fault and not a failed deploy.
+
+**The site 404s at the custom domain.** Check DNS actually points at
+`d-g-websites.github.io`: `dig +short davey.mywindowwashing.com`.
 
 **Certificate warning.** GitHub has not finished issuing yet. Wait, then tick
 Enforce HTTPS. If it is still stuck after an hour, remove and re-add the
