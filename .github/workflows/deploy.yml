@@ -1,10 +1,13 @@
 name: Deploy to VPS
 
-# Every push to main publishes the site. Nothing else is needed —
-# push, wait ~20 seconds, refresh the browser.
+# The site is published by pages.yml. This workflow deploys the same
+# public/ directory to a VPS instead, and is kept for the day that is
+# wanted again — the server config in deploy/ stays valid either way.
+#
+# Manual only: it would fail on every push while the VPS secrets are unset.
+# To switch back, add the secrets listed in the README and restore the
+# push trigger here.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 # If two pushes land close together, let the newer one win rather than
@@ -26,17 +29,7 @@ jobs:
           fetch-depth: 0
 
       - name: Stage images from img/ into public/img/
-        run: |
-          # Images are uploaded to img/ at the repository root because that is
-          # the easiest place to drop files into from the GitHub web UI. Only
-          # public/ is published, so they are copied across here. Both
-          # locations work; img/ is the one to use.
-          mkdir -p public/img
-          if [ -d img ]; then
-            cp -R img/. public/img/
-            rm -f public/img/README.md
-          fi
-          echo "Images staged: $(find public/img -type f ! -name '.gitkeep' | wc -l)"
+        run: ./deploy/stage-images.sh
 
       - name: Regenerate sitemap.xml
         run: ./deploy/generate-sitemap.sh

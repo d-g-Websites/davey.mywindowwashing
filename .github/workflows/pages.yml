@@ -1,0 +1,59 @@
+name: Deploy to GitHub Pages
+
+# Every push to main publishes the site. Nothing else is needed —
+# push, wait about a minute, refresh the browser.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a Pages deploy midway: the site would be left serving a
+# half-published state. Queue instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          # Full history so the sitemap can date each page from its last commit.
+          fetch-depth: 0
+
+      - name: Stage images from img/ into public/img/
+        run: ./deploy/stage-images.sh
+
+      - name: Regenerate sitemap.xml
+        run: ./deploy/generate-sitemap.sh
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Turns Pages on for the repository if it is not on already, so no
+          # one has to click through Settings first.
+          enablement: true
+
+      - name: Package public/ for Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish
+        id: deployment
+        uses: actions/deploy-pages@v4

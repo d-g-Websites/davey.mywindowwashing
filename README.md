@@ -1,7 +1,9 @@
 # davey.mywindowwashing.com
 
-Static site for Davey's brand, served from its own VPS. Separate from
-`www.mywindowwashing.com` and from that site's cPanel hosting.
+Static site for Davey's brand, published to GitHub Pages at
+<https://davey.mywindowwashing.com>. Separate from `www.mywindowwashing.com`
+and from that site's cPanel hosting — the only thing the two share is a DNS
+zone.
 
 Push to `main` and the live site updates. That's the whole workflow.
 
@@ -17,12 +19,15 @@ public/                 the website — everything in here is served
   404.html              error page (not in the sitemap)
   robots.txt
   sitemap.xml           generated on deploy, do not edit by hand
+  CNAME                 the custom domain, read by GitHub Pages
 deploy/
-  setup-vps.sh          one-time server setup
+  stage-images.sh       copies img/ into public/img/
   generate-sitemap.sh   rebuilds sitemap.xml from public/
-  nginx/                the server configuration, kept in version control
+  setup-vps.sh          VPS setup — unused while on Pages
+  nginx/                VPS server config — unused while on Pages
 .github/workflows/
-  deploy.yml            publishes public/ on every push to main
+  pages.yml             publishes public/ on every push to main
+  deploy.yml            the VPS alternative, manual-run only
 ```
 
 **Only `public/` is published.** Files outside it stay in the repo, with one
@@ -60,26 +65,30 @@ deploy mirrors `public/` exactly rather than adding to what is already there.
 
 ## URL shapes
 
-nginx serves `about.html` at `/about`, so link to pages **without** the
+GitHub Pages serves `about.html` at `/about`, so link to pages **without** the
 `.html`:
 
 ```html
 <a href="/about">About</a>          <!-- yes -->
-<a href="/about.html">About</a>     <!-- works, but redirects -->
+<a href="/about.html">About</a>     <!-- also 200, but see below -->
 ```
 
-Every other form redirects to the canonical one, so nothing 404s and search
-engines only see one URL per page:
+Unlike the nginx config in `deploy/`, Pages does **not** redirect the variants
+onto one canonical form — `/about` and `/about.html` both return 200. That is
+only an SEO problem if search engines find both, so:
 
-| Requested | Ends up at |
-|---|---|
-| `/about.html` | `/about` |
-| `/about/` | `/about` |
-| `/index.html` | `/` |
-| `/blog/index.html` | `/blog/` |
-| `http://…` | `https://…` |
+- link internally to the extensionless form, consistently, and
+- give every page a `<link rel="canonical">` naming that same form.
 
-A directory containing `index.html` keeps its trailing slash: `/blog/`.
+`public/index.html` already has its canonical tag. Getting this right in your
+own links is what keeps one page from being indexed as two.
+
+Use **root-relative** paths for images, CSS and links:
+
+```html
+<img src="/img/photo.jpg">     <!-- yes -->
+<img src="img/photo.jpg">      <!-- breaks on any page below the root -->
+```
 
 ---
 
@@ -87,84 +96,55 @@ A directory containing `index.html` keeps its trailing slash: `/blog/`.
 
 ### 1. DNS
 
-Point the subdomain at the new VPS:
+Add one record to the `mywindowwashing.com` zone:
 
 | Type | Name | Value |
 |---|---|---|
-| A | `davey` | the VPS IPv4 address |
-| AAAA | `davey` | the VPS IPv6 address, if it has one |
+| CNAME | `davey` | `d-g-websites.github.io` |
 
-This record lives in the `mywindowwashing.com` DNS zone. It does not affect
-the main site — that keeps resolving to cPanel.
+Add only this record. Do not modify the existing `A` records for the apex or
+`www` — those are what keep the main site pointed at cPanel. Nothing else in
+the zone changes, and mail is unaffected.
 
-Wait for it to resolve before step 2, or the certificate request fails:
+Check it with:
 
 ```bash
 dig +short davey.mywindowwashing.com
 ```
 
-### 2. The server
+### 2. Enable Pages
 
-On a fresh Debian or Ubuntu VPS:
+The workflow tries to switch Pages on by itself. If the run fails saying Pages
+is not enabled, set it by hand: **Settings → Pages → Source: GitHub Actions**.
 
-```bash
-git clone https://github.com/ginolyp-pixel/davey.mywindowwashing.git
-cd davey.mywindowwashing
-sudo ./deploy/setup-vps.sh
-```
+### 3. Custom domain and HTTPS
 
-It installs nginx and certbot, creates the `deploy` user, issues the TLS
-certificate, sets up automatic renewal, and turns on the firewall. Re-running
-it is safe. It finishes by printing the exact secrets to add in step 3.
+`public/CNAME` already names the domain, so the deploy claims it. Once DNS
+resolves, GitHub issues a Let's Encrypt certificate — usually minutes, but it
+can take up to an hour on a first setup. Then tick **Enforce HTTPS** under
+Settings → Pages.
 
-### 3. GitHub secrets
+Until DNS resolves the site is not reachable. This is expected: the page uses
+root-relative paths (`/img/…`), which only work at the domain root, so there
+is no useful preview at the `github.io` project URL.
 
-Make a deploy key on your own machine:
+### 4. Verify
 
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/davey_deploy -N "" -C "github-actions"
-```
-
-Authorise it on the server:
-
-```bash
-KEY=$(cat ~/.ssh/davey_deploy.pub)
-ssh root@davey.mywindowwashing.com \
-  "echo 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty $KEY' \
-   >> /home/deploy/.ssh/authorized_keys"
-```
-
-Then add these under **Settings → Secrets and variables → Actions**:
-
-| Secret | Value |
-|---|---|
-| `SSH_PRIVATE_KEY` | contents of `~/.ssh/davey_deploy` — the file **without** `.pub` |
-| `SSH_KNOWN_HOSTS` | output of `ssh-keyscan -t rsa,ecdsa,ed25519 davey.mywindowwashing.com` |
-| `VPS_HOST` | `davey.mywindowwashing.com` |
-| `VPS_USER` | `deploy` |
-| `VPS_PATH` | `/var/www/davey/public` |
-
-`SSH_KNOWN_HOSTS` pins the server's identity. Without it the deploy would
-trust whatever answers at that address, so a hijacked DNS record could collect
-the deploy key.
-
-### 4. First deploy
-
-Push to `main`, or run the workflow by hand from the Actions tab. You should
-get the placeholder page over HTTPS.
-
-### 5. Replace the placeholder
-
-Put the real site in `public/`, then **delete the `noindex` line** from
-`public/index.html`:
-
-```html
-<meta name="robots" content="noindex">
-```
-
-While that tag is present Google will not index the page.
+Push to `main`, watch the Actions tab, then load
+<https://davey.mywindowwashing.com>.
 
 ---
+
+## Hosting on a VPS instead
+
+`deploy/setup-vps.sh` and `deploy/nginx/` still work and are kept for the day
+a VPS is wanted — for server-side code, custom response headers, or redirect
+rules that Pages cannot express. Nothing in `public/` needs to change.
+
+To switch: run `sudo ./deploy/setup-vps.sh` on the server, add the secrets it
+prints (`SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS`, `VPS_HOST`, `VPS_USER`,
+`VPS_PATH`), restore the `push:` trigger in `.github/workflows/deploy.yml`,
+and point DNS at the server with an `A` record instead of the CNAME.
 
 ## SEO notes
 
@@ -189,24 +169,20 @@ links, not its Search Console property.
 
 ## Troubleshooting
 
-**The Actions run failed.** Open the failed step in the Actions tab. A
-`Permission denied (publickey)` in the rsync step means the deploy key is not
-in `/home/deploy/.ssh/authorized_keys`, or `SSH_PRIVATE_KEY` is missing the
-`-----BEGIN`/`-----END` lines — paste the whole file including those.
+**The Actions run failed.** Open the failed step in the Actions tab. "Pages is
+not enabled" means step 2 above was skipped.
 
-**`Host key verification failed`.** `SSH_KNOWN_HOSTS` is wrong or stale.
-Re-run `ssh-keyscan` and update the secret. Expect this after rebuilding the
-VPS, since the server gets a new host key.
+**The site 404s at the custom domain.** DNS has not resolved yet, or the CNAME
+points somewhere other than `d-g-websites.github.io`. Check with `dig +short
+davey.mywindowwashing.com`.
 
-**The site shows an old version.** Hard-refresh first. HTML is sent with
-`Cache-Control: no-cache`, but images and CSS are cached for a long time by
-design — rename a changed image, or add `?v=2` to its URL.
+**Certificate warning.** GitHub has not finished issuing yet. Wait, then tick
+Enforce HTTPS. If it is still stuck after an hour, remove and re-add the
+custom domain under Settings → Pages.
 
-**Certificate errors.** Check renewal with
-`sudo certbot certificates` and `systemctl status certbot.timer`. A dry run:
-`sudo certbot renew --dry-run`.
+**Images are broken.** The filenames in `img/` must match what
+`public/index.html` references exactly — the server is case-sensitive, so
+`Photo.JPG` will not answer a request for `photo.jpg`.
 
-**nginx will not start after a config change.** `sudo nginx -t` reports the
-line. To change the server config, edit `deploy/nginx/` in this repo, then
-re-run `sudo ./deploy/setup-vps.sh` on the VPS so the file stays in git rather
-than only on the server.
+**The site shows an old version.** Hard-refresh (Ctrl+Shift+R, or Cmd+Shift+R
+on a Mac). A Pages deploy takes about a minute after the run goes green.
