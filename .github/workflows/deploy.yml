@@ -25,6 +25,19 @@ jobs:
           # Full history so the sitemap can date each page from its last commit.
           fetch-depth: 0
 
+      - name: Stage images from img/ into public/img/
+        run: |
+          # Images are uploaded to img/ at the repository root because that is
+          # the easiest place to drop files into from the GitHub web UI. Only
+          # public/ is published, so they are copied across here. Both
+          # locations work; img/ is the one to use.
+          mkdir -p public/img
+          if [ -d img ]; then
+            cp -R img/. public/img/
+            rm -f public/img/README.md
+          fi
+          echo "Images staged: $(find public/img -type f ! -name '.gitkeep' | wc -l)"
+
       - name: Regenerate sitemap.xml
         run: ./deploy/generate-sitemap.sh
 

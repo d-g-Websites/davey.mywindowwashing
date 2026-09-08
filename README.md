@@ -10,8 +10,10 @@ Push to `main` and the live site updates. That's the whole workflow.
 ## Repository layout
 
 ```
+img/                    put images here — copied to public/img/ on deploy
 public/                 the website — everything in here is served
   index.html            /
+  img/                  images, as served at /img/<filename>
   404.html              error page (not in the sitemap)
   robots.txt
   sitemap.xml           generated on deploy, do not edit by hand
@@ -23,8 +25,19 @@ deploy/
   deploy.yml            publishes public/ on every push to main
 ```
 
-**Only `public/` is published.** Files outside it stay in the repo. When you
-unzip the site, its `index.html` goes at `public/index.html`.
+**Only `public/` is published.** Files outside it stay in the repo, with one
+exception: the deploy copies `img/` into `public/img/` first, so images can be
+uploaded to the top-level `img/` folder — the easiest place to reach from
+GitHub's **Add file → Upload files** button.
+
+Everything else goes in `public/`. A new page belongs at `public/about.html`,
+not at the repository root — a stray `index.html` up there is not published.
+
+### Adding images
+
+Drop them in `img/`, using the exact filenames `public/index.html` references.
+Names are case-sensitive on the server: `Photo.JPG` will not answer a request
+for `photo.jpg`.
 
 ---
 
