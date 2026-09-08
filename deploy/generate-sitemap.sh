@@ -14,11 +14,13 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PUBLIC="$ROOT/public"
 OUT="$PUBLIC/sitemap.xml"
 
-# Pages excluded from the sitemap: error pages and anything under a
-# directory starting with an underscore (partials, drafts, includes).
+# Pages excluded from the sitemap: error pages, Search Console verification
+# files, and anything under a directory starting with an underscore
+# (partials, drafts, includes).
 is_excluded() {
   case "$1" in
     404.html|500.html) return 0 ;;
+    google*.html)      return 0 ;;
     _*|*/_*)           return 0 ;;
     *)                 return 1 ;;
   esac

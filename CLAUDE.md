@@ -23,6 +23,9 @@ originally added at the repository root and appeared to be fine.
   `deploy/generate-sitemap.sh`. Edits are overwritten.
 - `public/img/` — populated from `img/` by `deploy/stage-images.sh`.
   Add images to `img/`.
+- `public/googlea55b0dac0348bb36.html` — Google Search Console's proof of
+  ownership. Deleting it can unverify the property. It looks like a stray
+  file; it is not. The sitemap generator skips `google*.html`.
 - `CNAME` and `public/CNAME` — both hold the custom domain. Removing
   `public/CNAME` can clear the domain on the next deploy and take the site down.
 
